@@ -88,6 +88,11 @@ f = 10
 tpr_pol_set = []
 tpr_set = []
 tprn_set = []
+
+tpr_pol_aucs = []
+tpr_aucs = []
+tprn_aucs = []
+
 mean_fpr = np.linspace(0, 1, 100)
 
 for fold in range(f):
@@ -323,7 +328,7 @@ for fold in range(f):
         performance(y_test,prediction_t_lg)
 
         rlts.append(lg_acc)
-        print('-----LG+Ploynomial-----------')
+        print('-----LG+Polynomial-----------')
         plf = PolynomialFeatures(2)
         datap = plf.fit_transform(data)
         datap_test = plf.transform(data_test)
@@ -355,6 +360,10 @@ for fold in range(f):
     fpr, tpr,_ = roc_curve((y_test==True).apply(int),prediction_tp[:,1])
     fprn, tprn,_ = roc_curve((y_test==True).apply(int),prediction_tn[:,1])
 
+    tpr_pol_aucs.append(auc(fpr_pol, tpr_pol))
+    tpr_aucs.append(auc(fpr, tpr))
+    tprn_aucs.append(auc(fprn, tprn))
+
     from numpy import interp
 
     interp_tpr_pol = interp(mean_fpr, fpr_pol, tpr_pol)
@@ -377,9 +386,9 @@ tpr_mean[-1] = 1.0
 tprn_mean = np.mean(tprn_set, axis=0)
 tprn_mean[-1] = 1.0
 
-print('AUC for Node2Vec Logistic + Poly features + Normal Features : ', auc(mean_fpr, tpr_pol_mean))
-print('AUC for Node2Vec Logistic + Linear Features + Normal Features : ', auc(mean_fpr, tpr_mean))
-print('AUC for Normal Features LogisticNormal Features Logistic : ', auc(mean_fpr, tprn_mean))
+print('AUC for Node2Vec Logistic + Poly features + Normal Features : ', auc(mean_fpr, tpr_pol_mean), ' +-', np.std(tpr_pol_aucs))
+print('AUC for Node2Vec Logistic + Linear Features + Normal Features : ', auc(mean_fpr, tpr_mean), ' +-', np.std(tpr_aucs))
+print('AUC for Normal Features LogisticNormal Features Logistic : ', auc(mean_fpr, tprn_mean), ' +-', np.std(tprn_aucs))
 
 plt.plot(mean_fpr, tpr_pol_mean, 'g', label='Node2Vec Logistic + Poly features + Normal Features')
 plt.plot(mean_fpr, np.minimum(tpr_pol_mean + np.std(tpr_pol_set, axis=0), 1), 'g', linewidth=0.5)
