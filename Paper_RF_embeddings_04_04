@@ -55,7 +55,7 @@ df_clicked=df_clicked.join(target_enc)
 #import random
 #random.seed(123)
 df_clicked.drop('Target',inplace=True,axis=1)
-n=1000
+n=100000
 
 df_ml=df_clicked.sample(n,replace=False,random_state=123)
 #%%
@@ -83,25 +83,31 @@ X[categorical_cols] = X[categorical_cols].apply(lambda col: le.fit_transform(col
 X = pd.get_dummies(X, prefix_sep='_', drop_first=True)
 
 # cross-validatio with "f" folders
-f = 2
+f = 10
 
-fpr_tpr_pol = [[],[]]
-fpr_tpr = [[],[]]
-fprn_tprn = [[],[]]
-
+tpr_pol_set = []
+tpr_set = []
+tprn_set = []
+mean_fpr = np.linspace(0, 1, 100)
 
 for fold in range(f):
     X_test = X.iloc[int(fold*n/f):int((fold+1)*n/f)]
     X_train = X.drop(X_test.index)
     y_test = y.iloc[int(fold*n/f):int((fold+1)*n/f)]
     y_train = y.drop(y_test.index)
-    print(X_train)
 
     # X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=0 )
 
+
+    from statistics import mode
+
+    # # undersample by random
+    # indexes_to_drop = list(y_train[y_train == mode(y_train)].sample(int(y_train.value_counts()[mode(y_train)]-n/f/2),replace=False,random_state=0).index)
+    # X_train, y_train = X_train.drop(indexes_to_drop), y_train.drop(indexes_to_drop)
+
     from imblearn.over_sampling import SMOTE
 
-    # undersampling using SMOTE
+    # oversampling using SMOTE
     sm = SMOTE(random_state=0)
     X_train, y_train = sm.fit_sample(X_train, y_train)
 
@@ -348,31 +354,41 @@ for fold in range(f):
     fpr, tpr,_ = roc_curve((y_test==True).apply(int),prediction_tp[:,1])
     fprn, tprn,_ = roc_curve((y_test==True).apply(int),prediction_tn[:,1])
 
-    fpr_tpr_pol[0].append(fpr_pol)
-    fpr_tpr_pol[1].append(tpr_pol)
-    fpr_tpr[0].append(fpr)
-    fpr_tpr[1].append(tpr)
-    fprn_tprn[0].append(fprn)
-    fprn_tprn[1].append(tprn)
+    from numpy import interp
+
+    interp_tpr_pol = interp(mean_fpr, fpr_pol, tpr_pol)
+    interp_tpr_pol[0] = 0.0
+    tpr_pol_set.append(interp_tpr_pol)
+
+    interp_tpr = interp(mean_fpr, fpr, tpr)
+    interp_tpr[0] = 0.0
+    tpr_set.append(interp_tpr)
+
+    interp_tprn = interp(mean_fpr, fprn, tprn)
+    interp_tprn[0] = 0.0
+    tprn_set.append(interp_tprn)
 
 
-fpr_pol_mean, tpr_pol_mean = np.mean(fpr_tpr_pol[0], axis=0), np.mean(fpr_tpr_pol[1], axis=0)
-fpr_mean, tpr_mean = np.mean(fpr_tpr[0], axis=0), np.mean(fpr_tpr[1], axis=0)
-fprn_mean, tprn_mean = np.mean(fprn_tprn[0], axis=0), np.mean(fprn_tprn[1], axis=0)
+tpr_pol_mean = np.mean(tpr_pol_set, axis=0)
+tpr_pol_mean[-1] = 1.0
+tpr_mean = np.mean(tpr_set, axis=0)
+tpr_mean[-1] = 1.0
+tprn_mean = np.mean(tprn_set, axis=0)
+tprn_mean[-1] = 1.0
 
-print('AUC for Node2Vec Logistic + Poly features + Normal Features : ', auc(fpr_pol_mean, tpr_pol_mean))
-print('AUC for Node2Vec Logistic + Linear Features + Normal Features : ', auc(fpr_mean, tpr_mean))
-print('AUC for Normal Features LogisticNormal Features Logistic : ', auc(fprn_mean, tprn_mean))
+print('AUC for Node2Vec Logistic + Poly features + Normal Features : ', auc(mean_fpr, tpr_pol_mean))
+print('AUC for Node2Vec Logistic + Linear Features + Normal Features : ', auc(mean_fpr, tpr_mean))
+print('AUC for Normal Features LogisticNormal Features Logistic : ', auc(mean_fpr, tprn_mean))
 
-plt.plot(fpr_pol_mean, tpr_pol_mean, 'g', label='Node2Vec Logistic + Poly features + Normal Features')
-plt.plot(fpr_pol_mean, np.minimum(tpr_pol_mean + np.std(fpr_tpr_pol[1]), 1), 'g', linewidth=0.5)
-plt.plot(fpr_pol_mean, np.maximum(tpr_pol_mean - np.std(fpr_tpr_pol[1]), 0), 'g', linewidth=0.5)
-plt.plot(fpr_mean, tpr_mean, 'r', label='Node2Vec Logistic + Linear Features + Normal Features')
-plt.plot(fpr_mean, np.minimum(tpr_mean + np.std(fpr_tpr[1]), 1), 'r', linewidth=0.5)
-plt.plot(fpr_mean, np.maximum(tpr_mean - np.std(fpr_tpr[1]), 0), 'r', linewidth=0.5)
-plt.plot(fprn_mean, tprn_mean,'b', label='Normal Features Logistic')
-plt.plot(fprn_mean, np.minimum(tprn_mean + np.std(fprn_tprn[1]), 1),'b', linewidth=0.5)
-plt.plot(fprn_mean, np.maximum(tprn_mean - np.std(fprn_tprn[1]), 0),'b', linewidth=0.5)
+plt.plot(mean_fpr, tpr_pol_mean, 'g', label='Node2Vec Logistic + Poly features + Normal Features')
+plt.plot(mean_fpr, np.minimum(tpr_pol_mean + np.std(tpr_pol_set, axis=0), 1), 'g', linewidth=0.5)
+plt.plot(mean_fpr, np.maximum(tpr_pol_mean - np.std(tpr_pol_set, axis=0), 0), 'g', linewidth=0.5)
+plt.plot(mean_fpr, tpr_mean, 'r', label='Node2Vec Logistic + Linear Features + Normal Features')
+plt.plot(mean_fpr, np.minimum(tpr_mean + np.std(tpr_set, axis=0), 1), 'r', linewidth=0.5)
+plt.plot(mean_fpr, np.maximum(tpr_mean - np.std(tpr_set, axis=0), 0), 'r', linewidth=0.5)
+plt.plot(mean_fpr, tprn_mean,'b', label='Normal Features Logistic')
+plt.plot(mean_fpr, np.minimum(tprn_mean + np.std(tprn_set, axis=0), 1),'b', linewidth=0.5)
+plt.plot(mean_fpr, np.maximum(tprn_mean - np.std(tprn_set, axis=0), 0),'b', linewidth=0.5)
 plt.legend()
 plt.show()
 #%%
