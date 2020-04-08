@@ -234,6 +234,7 @@ for fold in range(f):
     X_train2= np.hstack((X_train,data))
     X_test2= np.hstack((X_test,data_test))
 
+
     from sklearn.decomposition import PCA
     #find the optimal components number
     pca = PCA()
